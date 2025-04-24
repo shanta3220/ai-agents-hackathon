@@ -82,6 +82,35 @@ async def initialize() -> None:
 
     # Replace the placeholder with the database schema string
     instructions = instructions.replace("{database_schema_string}", database_schema_string)
+ 
+    # Update assistant with new instructions
+    # sync_openai_client.beta.assistants.update(
+    #     assistant_id=assistant.id,
+    #     name="Nuroxa Assistant",  # You can change the name here if needed
+    #     instructions=instructions,
+    #     tools=[
+    #         {"type": "code_interpreter"},
+    #         {"type": "file_search"},
+    #         {
+    #             "type": "function",
+    #             "function": {
+    #                 "name": "ask_database",
+    #                 "description": "This function is used to answer user questions about dementia risk prediction by executing SQLite queries.",
+    #                 "parameters": {
+    #                     "type": "object",
+    #                     "properties": {
+    #                         "query": {
+    #                             "type": "string",
+    #                             "description": "A valid SQLite query to extract risk-related metrics.",
+    #                         }
+    #                     },
+    #                     "required": ["query"],
+    #                     "additionalProperties": False,
+    #                 },
+    #             },
+    #         },
+    #     ],
+    # )
 
     tools_list = [
         {"type": "code_interpreter"},
