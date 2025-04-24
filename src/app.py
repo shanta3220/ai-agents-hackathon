@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from openai import AsyncAzureOpenAI, AzureOpenAI
 
 from event_handler import EventHandler
-from sales_data import SalesData
+from dementia_data import DementiaData 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ ASSISTANT_PASSWORD = os.getenv("ASSISTANT_PASSWORD")
 MAX_COMPLETION_TOKENS = 4096
 MAX_PROMPT_TOKENS = 10240
 
-sales_data = SalesData()
+dementia_data = DementiaData()
 cl.instrument_openai()
 ASSISTANT_READY = False
 
@@ -50,7 +50,7 @@ async_openai_client = AsyncAzureOpenAI(
 )
 
 function_map: Dict[str, Callable[[Any], str]] = {
-    "ask_database": lambda args: sales_data.ask_database(query=args.get("query")),
+   "ask_database": lambda args: dementia_data.ask_database(query=args.get("query")),
 }
 
 
@@ -61,7 +61,7 @@ async def auth_callback(username: str, password: str) -> cl.User | None:
     # Or use OAuth or custom provider for authentication.
     # See Chainlit documentation https://docs.chainlit.io/authentication/overview
     if (username, password) == ("user@nuroxa.com", ASSISTANT_PASSWORD):
-        return cl.User(identifier="user@nuroxa.com", metadata={"role": "sales", "provider": "credentials"})
+        return cl.User(identifier="user@nuroxa.com", metadata={"role": "risk_analysis", "provider": "credentials"})
     return None
 
 
@@ -71,8 +71,8 @@ async def initialize() -> None:
     if ASSISTANT_READY:
         return
 
-    await sales_data.connect()
-    database_schema_string = await sales_data.get_database_info()
+    await dementia_data.connect()
+    database_schema_string = await dementia_data.get_database_info()
 
     env = os.getenv("ENV", "development")
     INSTRUCTIONS_FILE = "instructions.txt" if env == "production" else "src/instructions.txt"
@@ -82,21 +82,35 @@ async def initialize() -> None:
 
     # Replace the placeholder with the database schema string
     instructions = instructions.replace("{database_schema_string}", database_schema_string)
-
-    # instructions = {
-    #     "You are a polite, professional assistant specializing in nuroxa data analysis. Provide clear, concise explanations.",
-    #     "Use the `ask_database` function for sales data queries, defaulting to aggregated data unless a detailed breakdown is requested. The function returns JSON data.",
-    #     f"Reference the following SQLite schema for the sales database: {database_schema_string}.",
-    #     "Use the `file_search` tool to retrieve product information from uploaded files when relevant. Prioritize Nuroxa sales database data over files when responding.",
-    #     "For sales data inquiries, present results in markdown tables by default unless the user requests visualizations.",
-    #     "For visualizations: 1. Write and test code in your sandboxed environment. 2. Use the user's language preferences for visualizations (e.g. chart labels). 3. Display successful visualizations or retry upon error. Never include the visualization FilePathAnnotation in the response.",
-    #     "If asked for 'help,' suggest example queries (e.g., 'What was last quarter's revenue?' or 'Top-selling products in Europe?').",
-    #     "Only use data from the nuroxa database or uploaded files to respond. If the query falls outside the available data or your expertise, or you're unsure, reply with: I'm unable to assist with that. Please ask more specific questions about Nuroxa sales and products or contact IT for further help.",
-    #     "If faced with aggressive behavior, calmly reply: 'I'm here to help with sales data inquiries. For other issues, please contact IT.'",
-    #     "Tailor responses to the user's language preferences, including terminology, measurement units, currency, and formats.",
-    #     "For download requests, respond with: 'The download link is provided below.'",
-    #     "Do not include markdown links to visualizations in your responses.",
-    # }
+ 
+    # Update assistant with new instructions
+    # sync_openai_client.beta.assistants.update(
+    #     assistant_id=assistant.id,
+    #     name="Nuroxa Assistant",  # You can change the name here if needed
+    #     instructions=instructions,
+    #     tools=[
+    #         {"type": "code_interpreter"},
+    #         {"type": "file_search"},
+    #         {
+    #             "type": "function",
+    #             "function": {
+    #                 "name": "ask_database",
+    #                 "description": "This function is used to answer user questions about dementia risk prediction by executing SQLite queries.",
+    #                 "parameters": {
+    #                     "type": "object",
+    #                     "properties": {
+    #                         "query": {
+    #                             "type": "string",
+    #                             "description": "A valid SQLite query to extract risk-related metrics.",
+    #                         }
+    #                     },
+    #                     "required": ["query"],
+    #                     "additionalProperties": False,
+    #                 },
+    #             },
+    #         },
+    #     ],
+    # )
 
     tools_list = [
         {"type": "code_interpreter"},
@@ -105,7 +119,7 @@ async def initialize() -> None:
             "type": "function",
             "function": {
                 "name": "ask_database",
-                "description": "This function is used to answer user questions about Nuroxa sales data by executing SQLite queries against the database.",
+                "description": "This function is used to answer user questions about Nuroxa's dementia risk prediction data by executing SQLite queries against the database.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -151,18 +165,18 @@ async def set_starters() -> list[cl.Starter]:
             icon="/public/idea.svg",
         ),
         cl.Starter(
-            label="Create a vivid pie chart of sales by region.",
-            message="Create a vivid pie chart of sales by region.",
+            label="Visualize risk predictions by input type.",
+            message="Visualize risk predictions by input type.",
             icon="/public/learn.svg",
         ),
         cl.Starter(
-            label="Staafdiagram van maandelijkse inkomsten voor wintersportproducten in 2023 met levendige kleuren.",
-            message="Staafdiagram van maandelijkse inkomsten voor wintersportproducten in 2023 met levendige kleuren.",
+            label="Average clinical risk by age group.",
+            message="Average clinical risk by age group.",
             icon="/public/terminal.svg",
         ),
         cl.Starter(
-            label="Download excel file for sales by category",
-            message="Download excel file for sales by category",
+            label="Download CSV of high-risk patients flagged in 2024.",
+            message="Download CSV of high-risk patients flagged in 2024.",
             icon="/public/write.svg",
         ),
     ]
