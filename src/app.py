@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from openai import AsyncAzureOpenAI, AzureOpenAI
 
 from event_handler import EventHandler
-from sales_data import SalesData
+from dementia_data import DementiaData 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ ASSISTANT_PASSWORD = os.getenv("ASSISTANT_PASSWORD")
 MAX_COMPLETION_TOKENS = 4096
 MAX_PROMPT_TOKENS = 10240
 
-sales_data = SalesData()
+dementia_data = DementiaData()
 cl.instrument_openai()
 ASSISTANT_READY = False
 
@@ -50,7 +50,7 @@ async_openai_client = AsyncAzureOpenAI(
 )
 
 function_map: Dict[str, Callable[[Any], str]] = {
-    "ask_database": lambda args: sales_data.ask_database(query=args.get("query")),
+   "ask_database": lambda args: dementia_data.ask_database(query=args.get("query")),
 }
 
 
@@ -71,9 +71,9 @@ async def initialize() -> None:
     if ASSISTANT_READY:
         return
 
-    await sales_data.connect()
-    database_schema_string = await sales_data.get_database_info()
-
+    await dementia_data.connect()
+    database_schema_string = await dementia_data.get_database_info()
+    
     env = os.getenv("ENV", "development")
     INSTRUCTIONS_FILE = "instructions.txt" if env == "production" else "src/instructions.txt"
 
