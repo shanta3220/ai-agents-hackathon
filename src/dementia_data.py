@@ -6,6 +6,12 @@ from pydantic import BaseModel
 
 DATA_BASE = "database/dementia_predictions.db"
 
+try:
+    import aiosqlite
+    print("aiosqlite imported successfully")
+except ImportError as e:
+    print(f"Error importing aiosqlite: {e}")
+
 class QueryResults(BaseModel):
     display_format: str = ""
     json_format: str = ""
@@ -16,10 +22,7 @@ class DementiaData:
 
     async def connect(self: "DementiaData") -> None:
         env = os.getenv("ENV", "development")
-        if env == "development":
-            db_uri = f"file:src/{DATA_BASE}?mode=ro"
-        elif env == "production":
-            db_uri = f"file:{DATA_BASE}?mode=ro"
+        db_uri = f"file:{'src/' if env == 'development' else ''}{DATA_BASE}?mode=ro"
 
         try:
             self.conn = await aiosqlite.connect(db_uri, uri=True)
@@ -34,7 +37,7 @@ class DementiaData:
             print("Database connection closed.")
 
     async def __get_table_names(self: "DementiaData") -> list:
-        """Return a list of table names."""
+        """Return a list of table names in the database."""
         table_names = []
         async with self.conn.execute("SELECT name FROM sqlite_master WHERE type='table';") as tables:
             async for table in tables:
@@ -43,13 +46,13 @@ class DementiaData:
         return table_names
 
     async def __get_column_info(self: "DementiaData", table_name: str) -> list:
-        """Return a list of tuples containing column names and their types."""
+        """Return a list of column names and types for a specified table."""
         column_info = []
         async with self.conn.execute(f"PRAGMA table_info('{table_name}');") as columns:
             async for col in columns:
                 column_info.append(f"{col[1]}: {col[2]}")
         return column_info
-    
+
     async def __get_input_types(self: "DementiaData") -> list:
         """Return a list of unique input types in the dementia_predictions table (e.g., 'clinical', 'audio')."""
         async with self.conn.execute("SELECT DISTINCT input_type FROM dementia_predictions;") as cursor:
@@ -92,69 +95,27 @@ class DementiaData:
         database_info += "\n\n"
 
         return database_info
+    
+    async def ask_database(self: "DementiaData", query: str) -> QueryResults:
+        """Function to query SQLite database with a provided SQL query."""
+        data_results = QueryResults()
 
-async def initialize():
-    dementia_data = DementiaData()
+        try:
+            async with self.conn.execute(query) as cursor:
+                rows = await cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
 
-    await dementia_data.connect()
-    database_schema_string = await dementia_data.get_database_info()
+            if not rows:
+                data_results.display_format = "The query returned no results. Try a different query."
+                data_results.json_format = ""
+            else:
+                data = pd.DataFrame(rows, columns=columns)
+                data_results.display_format = data.to_string(index=False)
+                data_results.json_format = data.to_json(index=False, orient="split")
 
-    instructions = {
-        "You are a helpful assistant specialized in dementia risk prediction analysis.",
-        "Use the `ask_database` function for dementia risk queries against the SQLite database.",
-        f"Reference the following SQLite schema for the dementia predictions database: {database_schema_string}.",
-        "Default to aggregated summaries unless user asks for row-level detail.",
-        "Present results in markdown tables unless visualization is requested.",
-        "Always filter or group data by input_type or prediction if needed.",
-        "Do not use sales or unrelated schemas. Focus strictly on dementia_predictions.db."
-    }
+        except Exception as e:
+            error_message = f"Query failed with error: {e}"
+            data_results.display_format = error_message
+            data_results.json_format = json.dumps({"error": str(e), "query": query})
 
-    tools_list = [
-        {"type": "code_interpreter"},
-        {
-            "type": "function",
-            "function": {
-                "name": "ask_database",
-                "description": "This function answers dementia prediction-related questions by running SQLite queries.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "A valid SQLite query for extracting information from the dementia_predictions table."
-                        }
-                    },
-                    "required": ["query"],
-                    "additionalProperties": False
-                }
-            }
-        }
-    ]
-
-    try:
-        sync_openai_client = AzureOpenAI(
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_key=api_key,
-            api_version=AZURE_OPENAI_API_VERSION,
-        )
-
-        assistant = sync_openai_client.beta.assistants.retrieve(assistant_id=assistant_id)
-
-        sync_openai_client.beta.assistants.update(
-            assistant_id=assistant.id,
-            name="Nuroxa Assistant",
-            model=AZURE_OPENAI_DEPLOYMENT,
-            instructions=str(instructions),
-            tools=tools_list,
-        )
-
-        config.ui.name = assistant.name
-        logger.info(f"Assistant initialized: {assistant.name}")
-
-        return assistant
-    except openai.NotFoundError as e:
-        logger.error(f"Assistant not found: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"An error occurred initializing the assistant: {e}")
-        return None
+        return data_results
