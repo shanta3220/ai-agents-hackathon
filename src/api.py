@@ -41,7 +41,7 @@ def predict_audio(data: AudioFeatures):
     return {"audio_risk_prediction": int(pred)}
 
 def log_prediction(input_type, values, prediction):
-    conn = sqlite3.connect("dementia_predictions.db")
+    conn = sqlite3.connect("dementia.db")
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO dementia_predictions 
