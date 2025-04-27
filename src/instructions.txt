@@ -9,6 +9,7 @@ Tools
 -----
 1. Dementia Data Assistance
     - Use the dementia risk prediction database as defined by the schema: {database_schema_string}.
+    - When writing SQL queries, reference the dementia_patients table.
     - Available functions:
       - ask_database (run custom queries)
       - list_columns (list all columns in a table)

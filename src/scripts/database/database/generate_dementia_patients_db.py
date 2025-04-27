@@ -1,11 +1,24 @@
 import pandas as pd
+import sqlite3
+import os
 
 # Load the real Alzheimer disease dataset
 csv_path = 'src/database/data/alzheimers_disease_data.csv'
 df = pd.read_csv(csv_path)
 
-# SQL table creation script
-create_table_sql = """
+# Path to save the .db file
+db_path = 'src/database/dementia_patients.db'
+
+# Delete existing database if exists (optional but safer for fresh generation)
+if os.path.exists(db_path):
+    os.remove(db_path)
+
+# Connect to the database (this will create it)
+conn = sqlite3.connect(db_path)
+cur = conn.cursor()
+
+# Create the dementia_patients table
+cur.execute("""
 CREATE TABLE IF NOT EXISTS dementia_patients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     PatientID INTEGER,
@@ -44,15 +57,13 @@ CREATE TABLE IF NOT EXISTS dementia_patients (
     Diagnosis INTEGER,
     DoctorInCharge TEXT
 );
-"""
+""")
 
-# Generate INSERT statements
-insert_statements = []
+# Insert each row
 for _, row in df.iterrows():
-    # Escape single quotes if any (important for text fields like DoctorInCharge)
-    doctor = row['DoctorInCharge'].replace("'", "''") if pd.notnull(row['DoctorInCharge']) else 'NULL'
+    doctor = row['DoctorInCharge'].replace("'", "''") if pd.notnull(row['DoctorInCharge']) else None
 
-    insert_statements.append(f"""
+    cur.execute("""
     INSERT INTO dementia_patients (
         PatientID, Age, Gender, Ethnicity, EducationLevel, BMI, Smoking, AlcoholConsumption, PhysicalActivity,
         DietQuality, SleepQuality, FamilyHistoryAlzheimers, CardiovascularDisease, Diabetes, Depression,
@@ -60,25 +71,22 @@ for _, row in df.iterrows():
         CholesterolTriglycerides, MMSE, FunctionalAssessment, MemoryComplaints, BehavioralProblems, ADL,
         Confusion, Disorientation, PersonalityChanges, DifficultyCompletingTasks, Forgetfulness, Diagnosis,
         DoctorInCharge
-    ) VALUES (
-        {row['PatientID']}, {row['Age']}, {row['Gender']}, {row['Ethnicity']}, {row['EducationLevel']},
-        {row['BMI']}, {row['Smoking']}, {row['AlcoholConsumption']}, {row['PhysicalActivity']},
-        {row['DietQuality']}, {row['SleepQuality']}, {row['FamilyHistoryAlzheimers']},
-        {row['CardiovascularDisease']}, {row['Diabetes']}, {row['Depression']}, {row['HeadInjury']},
-        {row['Hypertension']}, {row['SystolicBP']}, {row['DiastolicBP']}, {row['CholesterolTotal']},
-        {row['CholesterolLDL']}, {row['CholesterolHDL']}, {row['CholesterolTriglycerides']},
-        {row['MMSE']}, {row['FunctionalAssessment']}, {row['MemoryComplaints']}, {row['BehavioralProblems']},
-        {row['ADL']}, {row['Confusion']}, {row['Disorientation']}, {row['PersonalityChanges']},
-        {row['DifficultyCompletingTasks']}, {row['Forgetfulness']}, {row['Diagnosis']},
-        '{doctor}'
-    );
-    """.strip())
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        row['PatientID'], row['Age'], row['Gender'], row['Ethnicity'], row['EducationLevel'],
+        row['BMI'], row['Smoking'], row['AlcoholConsumption'], row['PhysicalActivity'],
+        row['DietQuality'], row['SleepQuality'], row['FamilyHistoryAlzheimers'],
+        row['CardiovascularDisease'], row['Diabetes'], row['Depression'], row['HeadInjury'],
+        row['Hypertension'], row['SystolicBP'], row['DiastolicBP'], row['CholesterolTotal'],
+        row['CholesterolLDL'], row['CholesterolHDL'], row['CholesterolTriglycerides'],
+        row['MMSE'], row['FunctionalAssessment'], row['MemoryComplaints'], row['BehavioralProblems'],
+        row['ADL'], row['Confusion'], row['Disorientation'], row['PersonalityChanges'],
+        row['DifficultyCompletingTasks'], row['Forgetfulness'], row['Diagnosis'],
+        doctor
+    ))
 
-# Combine all SQL parts
-full_sql_script = create_table_sql + "\n\n" + "\n".join(insert_statements)
+# Save (commit) and close
+conn.commit()
+conn.close()
 
-# Save the final script
-with open('src\database\populate_real_dementia_data.sql', 'w', encoding='utf-8') as f:
-    f.write(full_sql_script)
-
-print("SQL script 'populate_real_dementia_data.sql' created successfully!")
+print(f"Database created successfully at: {db_path}")
