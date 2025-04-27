@@ -41,9 +41,8 @@ records = []
 
 for filepath in all_files:
     print(f"Transcribing: {filepath}")
-
-    # FIX: Only normalize slashes, do NOT add quotes
-    fixed_path = filepath.replace("\\", "/")
+    
+    fixed_path = filepath.replace("\\", "/").lower()
 
     result = model.transcribe(
     fixed_path,
@@ -54,7 +53,7 @@ for filepath in all_files:
     fp16=False            # Force float32 if CPU-only
 )
 
-    label = 1 if "dementia" in filepath.lower() else 0
+    label = 0 if "/nodementia/" in fixed_path.lower() else 1
 
     records.append({
         "filename": os.path.basename(filepath),
