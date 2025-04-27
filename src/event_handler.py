@@ -8,7 +8,7 @@ from openai import AsyncAssistantEventHandler
 from openai.types.beta.threads.runs.function_tool_call import FunctionToolCall
 from typing_extensions import override
 
-from sales_data import QueryResults
+from dementia_data import QueryResults
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
