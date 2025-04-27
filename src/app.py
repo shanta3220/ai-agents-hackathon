@@ -14,13 +14,12 @@ from openai import AsyncAzureOpenAI, AzureOpenAI
 from event_handler import EventHandler
 from dementia_data import DementiaData 
 
-from src.scripts.tools.model_tools import predict_health_risk, predict_audio_risk, predict_transcript_risk
+from scripts.tools.model_tools import predict_health_risk, predict_audio_risk, predict_transcript_risk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv("src/.env", override=True)
-
 
 AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_API_KEY = os.environ.get("AZURE_OPENAI_API_KEY")
@@ -89,33 +88,33 @@ async def initialize() -> None:
     instructions = instructions.replace("{database_schema_string}", database_schema_string)
  
     # Update assistant with new instructions
-    # sync_openai_client.beta.assistants.update(
-    #     assistant_id=assistant.id,
-    #     name="Nuroxa Assistant",  # You can change the name here if needed
-    #     instructions=instructions,
-    #     tools=[
-    #         {"type": "code_interpreter"},
-    #         {"type": "file_search"},
-    #         {
-    #             "type": "function",
-    #             "function": {
-    #                 "name": "ask_database",
-    #                 "description": "This function is used to answer user questions about dementia risk prediction by executing SQLite queries.",
-    #                 "parameters": {
-    #                     "type": "object",
-    #                     "properties": {
-    #                         "query": {
-    #                             "type": "string",
-    #                             "description": "A valid SQLite query to extract risk-related metrics.",
-    #                         }
-    #                     },
-    #                     "required": ["query"],
-    #                     "additionalProperties": False,
-    #                 },
-    #             },
-    #         },
-    #     ],
-    # )
+    sync_openai_client.beta.assistants.update(
+        assistant_id=assistant.id,
+        name="Nuroxa Assistant",  # You can change the name here if needed
+        instructions=instructions,
+        tools=[
+            {"type": "code_interpreter"},
+            {"type": "file_search"},
+            {
+                "type": "function",
+                "function": {
+                    "name": "ask_database",
+                    "description": "This function is used to answer user questions about dementia risk prediction by executing SQLite queries.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "A valid SQLite query to extract risk-related metrics.",
+                            }
+                        },
+                        "required": ["query"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        ],
+    )
 
     tools_list = [
         {"type": "code_interpreter"},
