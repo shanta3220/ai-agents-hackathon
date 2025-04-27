@@ -4,7 +4,7 @@ import aiosqlite
 import pandas as pd
 from pydantic import BaseModel
 
-DATA_BASE = "database/dementia_predictions.db"
+DATA_BASE = "database/dementia_patients.db"
 
 try:
     import aiosqlite
@@ -53,26 +53,14 @@ class DementiaData:
                 column_info.append(f"{col[1]}: {col[2]}")
         return column_info
 
-    async def __get_input_types(self: "DementiaData") -> list:
-        """Return a list of unique input types in the dementia_predictions table (e.g., 'clinical', 'audio')."""
-        async with self.conn.execute("SELECT DISTINCT input_type FROM dementia_predictions;") as cursor:
-            result = await cursor.fetchall()
-        return [row[0] for row in result]
-
-    async def __get_predictions(self: "DementiaData") -> list:
-        """Return a list of unique prediction values from the dementia_predictions table."""
-        async with self.conn.execute("SELECT DISTINCT prediction FROM dementia_predictions;") as cursor:
-            result = await cursor.fetchall()
-        return [row[0] for row in result]
-
-    async def __get_years(self: "DementiaData") -> list:
-        """Return a list of unique years extracted from the timestamp field."""
-        async with self.conn.execute("SELECT DISTINCT strftime('%Y', timestamp) as year FROM dementia_predictions ORDER BY year;") as cursor:
+    async def __get_distinct_values(self: "DementiaData", table: str, column: str) -> list:
+        """Generic function to get distinct values from a column."""
+        async with self.conn.execute(f"SELECT DISTINCT {column} FROM {table};") as cursor:
             result = await cursor.fetchall()
         return [row[0] for row in result if row[0] is not None]
 
     async def get_database_info(self: "DementiaData") -> str:
-        """Return a string containing the database schema information and common query fields."""
+        """Return a string containing the database schema information."""
         table_dicts = []
         for table_name in await self.__get_table_names():
             columns_names = await self.__get_column_info(table_name)
@@ -85,17 +73,9 @@ class DementiaData:
             ]
         )
 
-        input_types = await self.__get_input_types()
-        predictions = await self.__get_predictions()
-        years = await self.__get_years()
-
-        database_info += f"\nInput Types: {', '.join(map(str, input_types))}"
-        database_info += f"\nPrediction Values: {', '.join(map(str, predictions))}"
-        database_info += f"\nPrediction Years: {', '.join(map(str, years))}"
         database_info += "\n\n"
-
         return database_info
-    
+
     async def ask_database(self: "DementiaData", query: str) -> QueryResults:
         """Function to query SQLite database with a provided SQL query."""
         data_results = QueryResults()
@@ -119,3 +99,75 @@ class DementiaData:
             data_results.json_format = json.dumps({"error": str(e), "query": query})
 
         return data_results
+    
+
+    async def list_columns(self: "DementiaData", table: str) -> QueryResults:
+        columns = await self.__get_column_info(table)
+        text = f"### Columns in `{table}`:\n" + "\n".join(f"- {col}" for col in columns)
+        return QueryResults(
+            display_format=text,
+            json_format=json.dumps({"table": table, "columns": columns})
+        )
+
+    async def list_unique_values(self: "DementiaData", table: str, column: str) -> QueryResults:
+        values = await self.__get_distinct_values(table, column)
+        if not values:
+            text = f"No unique values found for `{column}` in `{table}`."
+            json_data = {"table": table, "column": column, "values": []}
+        else:
+            text = f"### Unique values for `{column}` in `{table}`:\n" + "\n".join(f"- {val}" for val in values)
+            json_data = {"table": table, "column": column, "values": values}
+        return QueryResults(
+            display_format=text,
+            json_format=json.dumps(json_data)
+        )
+
+    async def count_unique_values(self: "DementiaData", table: str, column: str) -> QueryResults:
+        query = f"SELECT COUNT(DISTINCT {column}) FROM {table};"
+        async with self.conn.execute(query) as cursor:
+            result = await cursor.fetchone()
+        count = result[0] if result else 0
+        return QueryResults(
+            display_format=f"There are **{count}** unique values in `{column}` of `{table}`.",
+            json_format=json.dumps({"table": table, "column": column, "unique_count": count})
+        )
+
+
+    async def summarize_numeric_column(self: "DementiaData", table: str, column: str) -> QueryResults:
+        summary = {}
+        async with self.conn.execute(f"SELECT MIN({column}), MAX({column}), AVG({column}), "
+                                    f"(SELECT {column} FROM {table} ORDER BY {column} LIMIT 1 OFFSET (SELECT COUNT(*) FROM {table})/2), "
+                                    f"(SELECT AVG( ({column} - (SELECT AVG({column}) FROM {table})) * "
+                                    f"({column} - (SELECT AVG({column}) FROM {table})) ) FROM {table}) as variance "
+                                    f"FROM {table};") as cursor:
+            row = await cursor.fetchone()
+
+        if row:
+            summary = {
+                "min": row[0],
+                "max": row[1],
+                "average": row[2],
+                "median": row[3],
+                "std_dev": (row[4] or 0) ** 0.5,
+            }
+
+        text = f"""### Summary for `{column}` in `{table}`:
+    - Min: {summary.get('min')}
+    - Max: {summary.get('max')}
+    - Average: {summary.get('average')}
+    - Median: {summary.get('median')}
+    - Std Dev: {summary.get('std_dev')}
+"""
+        return QueryResults(
+            display_format=text,
+            json_format=json.dumps({"table": table, "column": column, "summary": summary})
+        )
+
+    async def count_records(self: "DementiaData", table: str) -> QueryResults:
+        async with self.conn.execute(f"SELECT COUNT(*) FROM {table};") as cursor:
+            result = await cursor.fetchone()
+        count = result[0] if result else 0
+        return QueryResults(
+        display_format=f"There are **{count}** total records in `{table}`.",
+        json_format=json.dumps({"table": table, "record_count": count})
+    )

@@ -51,11 +51,20 @@ async_openai_client = AsyncAzureOpenAI(
     api_version=AZURE_OPENAI_API_VERSION,
 )
 
-function_map: Dict[str, Callable[[Any], str]] = {
-   "ask_database": lambda args: dementia_data.ask_database(query=args.get("query")),
-   "predict_health_risk": predict_health_risk,
-   "predict_audio_risk": predict_audio_risk,
-   "predict_transcript_risk": predict_transcript_risk
+async def ask_database_handler(args):
+    result = await dementia_data.ask_database(query=args.get("query"))
+    return result.display_format
+
+function_map: Dict[str, Callable[[Any], Any]] = {
+    "ask_database": lambda args: dementia_data.ask_database(query=args.get("query")),
+    "predict_health_risk": predict_health_risk,
+    "predict_audio_risk": predict_audio_risk,
+    "predict_transcript_risk": predict_transcript_risk,
+    "list_columns": lambda args: dementia_data.list_columns(args.get("table")),
+    "list_unique_values": lambda args: dementia_data.list_unique_values(args.get("table"), args.get("column")),
+    "count_unique_values": lambda args: dementia_data.count_unique_values(args.get("table"), args.get("column")),
+    "summarize_numeric_column": lambda args: dementia_data.summarize_numeric_column(args.get("table"), args.get("column")),
+    "count_records": lambda args: dementia_data.count_records(args.get("table")),
 }
 
 @cl.password_auth_callback
@@ -226,7 +235,80 @@ async def initialize() -> None:
                 "additionalProperties": False,
             },
         },
-    }
+    },
+    {
+    "type": "function",
+        "function": {
+            "name": "list_columns",
+            "description": "List all columns in a specified database table.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string", "description": "The table name to list columns from."}
+                },
+                "required": ["table"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_unique_values",
+            "description": "List all unique values in a specified column of a table.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string", "description": "Table name."},
+                    "column": {"type": "string", "description": "Column name."}
+                },
+                "required": ["table", "column"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "count_unique_values",
+            "description": "Count how many unique values are in a specified column.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string"},
+                    "column": {"type": "string"}
+                },
+                "required": ["table", "column"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "summarize_numeric_column",
+            "description": "Summarize statistics (min, max, avg, median, std) of a numeric column.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string"},
+                    "column": {"type": "string"}
+                },
+                "required": ["table", "column"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "count_records",
+            "description": "Count the total number of records in a table.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string"}
+                },
+                "required": ["table"],
+            },
+        },
+    },
     ]
 
     try:
