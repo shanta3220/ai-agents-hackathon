@@ -14,10 +14,13 @@ from openai import AsyncAzureOpenAI, AzureOpenAI
 from event_handler import EventHandler
 from dementia_data import DementiaData 
 
+from src.scripts.tools.model_tools import predict_health_risk, predict_audio_risk, predict_transcript_risk
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv("src/.env", override=True)
+
 
 AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_API_KEY = os.environ.get("AZURE_OPENAI_API_KEY")
@@ -51,8 +54,10 @@ async_openai_client = AsyncAzureOpenAI(
 
 function_map: Dict[str, Callable[[Any], str]] = {
    "ask_database": lambda args: dementia_data.ask_database(query=args.get("query")),
+   "predict_health_risk": predict_health_risk,
+   "predict_audio_risk": predict_audio_risk,
+   "predict_transcript_risk": predict_transcript_risk
 }
-
 
 @cl.password_auth_callback
 async def auth_callback(username: str, password: str) -> cl.User | None:
@@ -136,6 +141,93 @@ async def initialize() -> None:
                 },
             },
         },
+    {
+        "type": "function",
+        "function": {
+            "name": "predict_health_risk",
+            "description": "Predict dementia risk based on patient's health profile.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "Age": {"type": "number"},
+                    "Gender": {"type": "integer"},
+                    "Ethnicity": {"type": "integer"},
+                    "EducationLevel": {"type": "integer"},
+                    "BMI": {"type": "number"},
+                    "Smoking": {"type": "integer"},
+                    "AlcoholConsumption": {"type": "integer"},
+                    "PhysicalActivity": {"type": "integer"},
+                    "DietQuality": {"type": "integer"},
+                    "SleepQuality": {"type": "integer"},
+                    "FamilyHistoryAlzheimers": {"type": "integer"},
+                    "CardiovascularDisease": {"type": "integer"},
+                    "Diabetes": {"type": "integer"},
+                    "Depression": {"type": "integer"},
+                    "HeadInjury": {"type": "integer"},
+                    "Hypertension": {"type": "integer"},
+                    "SystolicBP": {"type": "number"},
+                    "DiastolicBP": {"type": "number"},
+                    "CholesterolTotal": {"type": "number"},
+                    "CholesterolLDL": {"type": "number"},
+                    "CholesterolHDL": {"type": "number"},
+                    "CholesterolTriglycerides": {"type": "number"},
+                    "MMSE": {"type": "integer"},
+                    "FunctionalAssessment": {"type": "integer"},
+                    "MemoryComplaints": {"type": "integer"},
+                    "BehavioralProblems": {"type": "integer"},
+                    "ADL": {"type": "integer"},
+                    "Confusion": {"type": "integer"},
+                    "Disorientation": {"type": "integer"},
+                    "PersonalityChanges": {"type": "integer"},
+                    "DifficultyCompletingTasks": {"type": "integer"},
+                    "Forgetfulness": {"type": "integer"},
+                },
+                "required": [
+                    "Age", "Gender", "BMI", "Smoking", "AlcoholConsumption",
+                    "PhysicalActivity", "FamilyHistoryAlzheimers", "Hypertension", "SystolicBP", "DiastolicBP"
+                ],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "predict_audio_risk",
+            "description": "Predict dementia risk based on extracted audio features from a patient's speech.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "duration": {"type": "number"},
+                    "tempo": {"type": "number"},
+                    "zero_crossing_rate": {"type": "number"},
+                    "rms_energy": {"type": "number"},
+                },
+                "required": ["duration", "tempo", "zero_crossing_rate", "rms_energy"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "predict_transcript_risk",
+            "description": "Predict dementia risk based on transcript speech features like word count, sentence count, etc.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "word_count": {"type": "number"},
+                    "sentence_count": {"type": "number"},
+                    "avg_sentence_length": {"type": "number"},
+                    "pause_count": {"type": "number"},
+                    "speech_rate": {"type": "number"},
+                    "pause_per_sentence": {"type": "number"},
+                },
+                "required": ["word_count", "sentence_count", "avg_sentence_length", "pause_count", "speech_rate", "pause_per_sentence"],
+                "additionalProperties": False,
+            },
+        },
+    }
     ]
 
     try:
