@@ -56,7 +56,7 @@ print("Classification Report:")
 print(classification_report(y_test, y_pred))
 
 # Save the trained model
-model_output_path = 'trained_models/transcript_dementia_model.pkl'
+model_output_path = 'src/model/transcript_model.pkl'
 os.makedirs(os.path.dirname(model_output_path), exist_ok=True)
 joblib.dump(model, model_output_path)
 

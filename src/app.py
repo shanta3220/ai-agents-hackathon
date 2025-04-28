@@ -220,7 +220,8 @@ async def initialize() -> None:
         "type": "function",
         "function": {
             "name": "predict_transcript_risk",
-            "description": "Predict dementia risk based on transcript speech features like word count, sentence count, etc.",
+            "description": "Predict dementia risk based on transcript speech features like word count, sentence count, etc. "
+            "If not provided check the function some values are auto calculated.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -330,30 +331,39 @@ async def initialize() -> None:
 
 @cl.set_starters
 async def set_starters() -> list[cl.Starter]:
-    """Set the starters for the assistant"""
+    """Set the starters for the Nuroxa Assistant."""
     return [
         cl.Starter(
-            label="Help",
-            message="help.",
+            label="Help and Usage Guide",
+            message="Help: How can I interact with you?",
             icon="/public/idea.svg",
         ),
         cl.Starter(
-            label="Visualize risk predictions by input type.",
-            message="Visualize risk predictions by input type.",
+            label="Explore Database Columns",
+            message="List all columns in the dementia_patients table.",
+            icon="/public/database.svg",
+        ),
+        cl.Starter(
+            label="Summarize Systolic Blood Pressure",
+            message="Summarize the SystolicBP field (min, max, average, etc).",
             icon="/public/learn.svg",
         ),
         cl.Starter(
-            label="Average clinical risk by age group.",
-            message="Average clinical risk by age group.",
+            label="Predict Risk from Partial Patient Profile",
+            message="Predict dementia risk based on this patient: Age 72, Male, BMI 27, reports forgetfulness and hypertension.",
             icon="/public/terminal.svg",
         ),
         cl.Starter(
-            label="Download CSV of high-risk patients flagged in 2024.",
-            message="Download CSV of high-risk patients flagged in 2024.",
-            icon="/public/write.svg",
+            label="Predict Risk from Audio Features",
+            message="Predict dementia risk from audio features: duration 45s, tempo 85 bpm, zero crossing rate 0.04, rms energy 0.03.",
+            icon="/public/audio.svg",
+        ),
+        cl.Starter(
+            label="Predict Risk from Speech Transcript",
+            message="Predict dementia risk from speech features: 250 words, 12 sentences, average sentence length 20, 30 pauses.",
+            icon="/public/mic.svg",
         ),
     ]
-
 
 async def get_thread_id(async_openai_client: AsyncAzureOpenAI) -> str:
     """Get the thread ID for the conversation"""
