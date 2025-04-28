@@ -6,3 +6,8 @@ pydantic==2.10.1
 pandas>=2.2.3, <3.0.0
 pillow>=10.4.0, <11.0.0
 python_dotenv>=1.0.1, <2.0.0
+joblib>=1.4.0,<2.0.0
+scikit-learn>=1.4.2,<2.0.0
+numpy>=1.26.4,<2.0.0
+git+https://github.com/openai/whisper.git
+ffmpeg-python>=0.2.0,<1.0.0
