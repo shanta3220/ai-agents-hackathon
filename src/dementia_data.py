@@ -76,14 +76,19 @@ class DementiaData:
         database_info += "\n\n"
         return database_info
 
-    async def ask_database(self: "DementiaData", query: str) -> QueryResults:
-        """Function to query SQLite database with a provided SQL query."""
+    async def ask_database(self: "DementiaData", query: str, limit: int = None) -> QueryResults:
+        """Function to query SQLite database with a provided SQL query, with optional LIMIT for performance."""
         data_results = QueryResults()
+
+        if limit is not None:
+            query = f"{query.strip().rstrip(';')} LIMIT {limit};"
 
         try:
             async with self.conn.execute(query) as cursor:
-                rows = await cursor.fetchall()
                 columns = [description[0] for description in cursor.description]
+                rows = []
+                async for row in cursor:
+                    rows.append(row)
 
             if not rows:
                 data_results.display_format = "The query returned no results. Try a different query."
@@ -99,6 +104,7 @@ class DementiaData:
             data_results.json_format = json.dumps({"error": str(e), "query": query})
 
         return data_results
+
     
 
     async def list_columns(self: "DementiaData", table: str) -> QueryResults:
