@@ -413,6 +413,9 @@ async def get_attachments(message: cl.Message, async_openai_client: AsyncAzureOp
     await cl.Message(content="Uploading completed.").send()
     return message_files
 
+@cl.on_chat_resume
+async def on_chat_resume():
+    await cl.Message(content="Session resumed! You can continue asking your next question.").send()
 
 @cl.on_message
 async def main(message: cl.Message) -> None:
