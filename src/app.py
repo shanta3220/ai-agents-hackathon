@@ -14,6 +14,8 @@ from openai import AsyncAzureOpenAI, AzureOpenAI
 from event_handler import EventHandler
 from dementia_data import DementiaData 
 
+from scripts.tools.model_tools import predict_health_risk, predict_audio_risk, predict_transcript_risk
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -49,10 +51,21 @@ async_openai_client = AsyncAzureOpenAI(
     api_version=AZURE_OPENAI_API_VERSION,
 )
 
-function_map: Dict[str, Callable[[Any], str]] = {
-   "ask_database": lambda args: dementia_data.ask_database(query=args.get("query")),
-}
+async def ask_database_handler(args):
+    result = await dementia_data.ask_database(query=args.get("query"))
+    return result.display_format
 
+function_map: Dict[str, Callable[[Any], Any]] = {
+    "ask_database": lambda args: dementia_data.ask_database(query=args.get("query")),
+    "predict_health_risk": predict_health_risk,
+    "predict_audio_risk": predict_audio_risk,
+    "predict_transcript_risk": predict_transcript_risk,
+    "list_columns": lambda args: dementia_data.list_columns(args.get("table")),
+    "list_unique_values": lambda args: dementia_data.list_unique_values(args.get("table"), args.get("column")),
+    "count_unique_values": lambda args: dementia_data.count_unique_values(args.get("table"), args.get("column")),
+    "summarize_numeric_column": lambda args: dementia_data.summarize_numeric_column(args.get("table"), args.get("column")),
+    "count_records": lambda args: dementia_data.count_records(args.get("table")),
+}
 
 @cl.password_auth_callback
 async def auth_callback(username: str, password: str) -> cl.User | None:
@@ -84,33 +97,33 @@ async def initialize() -> None:
     instructions = instructions.replace("{database_schema_string}", database_schema_string)
  
     # Update assistant with new instructions
-    # sync_openai_client.beta.assistants.update(
-    #     assistant_id=assistant.id,
-    #     name="Nuroxa Assistant",  # You can change the name here if needed
-    #     instructions=instructions,
-    #     tools=[
-    #         {"type": "code_interpreter"},
-    #         {"type": "file_search"},
-    #         {
-    #             "type": "function",
-    #             "function": {
-    #                 "name": "ask_database",
-    #                 "description": "This function is used to answer user questions about dementia risk prediction by executing SQLite queries.",
-    #                 "parameters": {
-    #                     "type": "object",
-    #                     "properties": {
-    #                         "query": {
-    #                             "type": "string",
-    #                             "description": "A valid SQLite query to extract risk-related metrics.",
-    #                         }
-    #                     },
-    #                     "required": ["query"],
-    #                     "additionalProperties": False,
-    #                 },
-    #             },
-    #         },
-    #     ],
-    # )
+    sync_openai_client.beta.assistants.update(
+        assistant_id=assistant.id,
+        name="Nuroxa Assistant",  # You can change the name here if needed
+        instructions=instructions,
+        tools=[
+            {"type": "code_interpreter"},
+            {"type": "file_search"},
+            {
+                "type": "function",
+                "function": {
+                    "name": "ask_database",
+                    "description": "This function is used to answer user questions about dementia risk prediction by executing SQLite queries.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "A valid SQLite query to extract risk-related metrics.",
+                            }
+                        },
+                        "required": ["query"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        ],
+    )
 
     tools_list = [
         {"type": "code_interpreter"},
@@ -136,6 +149,167 @@ async def initialize() -> None:
                 },
             },
         },
+    {
+        "type": "function",
+        "function": {
+            "name": "predict_health_risk",
+            "description": "Predict dementia risk based on patient's health profile.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "Age": {"type": "number"},
+                    "Gender": {"type": "integer"},
+                    "Ethnicity": {"type": "integer"},
+                    "EducationLevel": {"type": "integer"},
+                    "BMI": {"type": "number"},
+                    "Smoking": {"type": "integer"},
+                    "AlcoholConsumption": {"type": "integer"},
+                    "PhysicalActivity": {"type": "integer"},
+                    "DietQuality": {"type": "integer"},
+                    "SleepQuality": {"type": "integer"},
+                    "FamilyHistoryAlzheimers": {"type": "integer"},
+                    "CardiovascularDisease": {"type": "integer"},
+                    "Diabetes": {"type": "integer"},
+                    "Depression": {"type": "integer"},
+                    "HeadInjury": {"type": "integer"},
+                    "Hypertension": {"type": "integer"},
+                    "SystolicBP": {"type": "number"},
+                    "DiastolicBP": {"type": "number"},
+                    "CholesterolTotal": {"type": "number"},
+                    "CholesterolLDL": {"type": "number"},
+                    "CholesterolHDL": {"type": "number"},
+                    "CholesterolTriglycerides": {"type": "number"},
+                    "MMSE": {"type": "integer"},
+                    "FunctionalAssessment": {"type": "integer"},
+                    "MemoryComplaints": {"type": "integer"},
+                    "BehavioralProblems": {"type": "integer"},
+                    "ADL": {"type": "integer"},
+                    "Confusion": {"type": "integer"},
+                    "Disorientation": {"type": "integer"},
+                    "PersonalityChanges": {"type": "integer"},
+                    "DifficultyCompletingTasks": {"type": "integer"},
+                    "Forgetfulness": {"type": "integer"},
+                },
+                "required": [
+                    "Age", "Gender", "BMI", "Smoking", "AlcoholConsumption",
+                    "PhysicalActivity", "FamilyHistoryAlzheimers", "Hypertension", "SystolicBP", "DiastolicBP"
+                ],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "predict_audio_risk",
+            "description": "Predict dementia risk based on extracted audio features from a patient's speech.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "duration": {"type": "number"},
+                    "tempo": {"type": "number"},
+                    "zero_crossing_rate": {"type": "number"},
+                    "rms_energy": {"type": "number"},
+                },
+                "required": ["duration", "tempo", "zero_crossing_rate", "rms_energy"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "predict_transcript_risk",
+            "description": "Predict dementia risk based on transcript speech features like word count, sentence count, etc. "
+            "If not provided check the function some values are auto calculated.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "word_count": {"type": "number"},
+                    "sentence_count": {"type": "number"},
+                    "avg_sentence_length": {"type": "number"},
+                    "pause_count": {"type": "number"},
+                    "speech_rate": {"type": "number"},
+                    "pause_per_sentence": {"type": "number"},
+                },
+                "required": ["word_count", "sentence_count", "avg_sentence_length", "pause_count", "speech_rate", "pause_per_sentence"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+    "type": "function",
+        "function": {
+            "name": "list_columns",
+            "description": "List all columns in a specified database table.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string", "description": "The table name to list columns from."}
+                },
+                "required": ["table"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_unique_values",
+            "description": "List all unique values in a specified column of a table.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string", "description": "Table name."},
+                    "column": {"type": "string", "description": "Column name."}
+                },
+                "required": ["table", "column"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "count_unique_values",
+            "description": "Count how many unique values are in a specified column.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string"},
+                    "column": {"type": "string"}
+                },
+                "required": ["table", "column"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "summarize_numeric_column",
+            "description": "Summarize statistics (min, max, avg, median, std) of a numeric column.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string"},
+                    "column": {"type": "string"}
+                },
+                "required": ["table", "column"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "count_records",
+            "description": "Count the total number of records in a table.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table": {"type": "string"}
+                },
+                "required": ["table"],
+            },
+        },
+    },
     ]
 
     try:
@@ -157,30 +331,39 @@ async def initialize() -> None:
 
 @cl.set_starters
 async def set_starters() -> list[cl.Starter]:
-    """Set the starters for the assistant"""
+    """Set the starters for the Nuroxa Assistant."""
     return [
         cl.Starter(
-            label="Help",
-            message="help.",
+            label="Help and Usage Guide",
+            message="Help: How can I interact with you?",
             icon="/public/idea.svg",
         ),
         cl.Starter(
-            label="Visualize risk predictions by input type.",
-            message="Visualize risk predictions by input type.",
+            label="Explore Database Columns",
+            message="List all columns in the dementia_patients table.",
+            icon="/public/database.svg",
+        ),
+        cl.Starter(
+            label="Summarize Systolic Blood Pressure",
+            message="Summarize the SystolicBP field (min, max, average, etc).",
             icon="/public/learn.svg",
         ),
         cl.Starter(
-            label="Average clinical risk by age group.",
-            message="Average clinical risk by age group.",
+            label="Predict Risk from Partial Patient Profile",
+            message="Predict dementia risk based on this patient: Age 72, Male, BMI 27, reports forgetfulness and hypertension.",
             icon="/public/terminal.svg",
         ),
         cl.Starter(
-            label="Download CSV of high-risk patients flagged in 2024.",
-            message="Download CSV of high-risk patients flagged in 2024.",
-            icon="/public/write.svg",
+            label="Predict Risk from Audio Features",
+            message="Predict dementia risk from audio features: duration 45s, tempo 85 bpm, zero crossing rate 0.04, rms energy 0.03.",
+            icon="/public/audio.svg",
+        ),
+        cl.Starter(
+            label="Predict Risk from Speech Transcript",
+            message="Predict dementia risk from speech features: 250 words, 12 sentences, average sentence length 20, 30 pauses.",
+            icon="/public/mic.svg",
         ),
     ]
-
 
 async def get_thread_id(async_openai_client: AsyncAzureOpenAI) -> str:
     """Get the thread ID for the conversation"""
@@ -230,6 +413,9 @@ async def get_attachments(message: cl.Message, async_openai_client: AsyncAzureOp
     await cl.Message(content="Uploading completed.").send()
     return message_files
 
+@cl.on_chat_resume
+async def on_chat_resume():
+    await cl.Message(content="Session resumed! You can continue asking your next question.").send()
 
 @cl.on_message
 async def main(message: cl.Message) -> None:
