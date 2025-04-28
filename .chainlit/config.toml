@@ -28,6 +28,14 @@ latex = false
 # Automatically tag threads with the current chat profile (if a chat profile is used)
 auto_tag_thread = true
 
+
+[auth]
+provider = "google"
+client_id = "${GOOGLE_CLIENT_ID}"
+client_secret = "${GOOGLE_CLIENT_SECRET}"
+redirect_url = "http://localhost:8000/callback" # Local test, adjust for production
+
+
 # Allow users to edit their own messages
 edit_message = true
 
