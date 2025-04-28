@@ -17,3 +17,5 @@ appsettings.*.json
 # AZD
 .azure/
 .files/
+
+src/database/data/DementiaNet
