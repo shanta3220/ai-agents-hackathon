@@ -31,6 +31,19 @@ ASSISTANT_PASSWORD = os.getenv("ASSISTANT_PASSWORD")
 MAX_COMPLETION_TOKENS = 4096
 MAX_PROMPT_TOKENS = 10240
 
+patient_data = {
+    "Age": 75,
+    "Gender": "Female",
+    "BMI": 25.4,
+    "Hypertension": "Yes",
+    "MemoryComplaints": "Yes",
+    "FamilyHistoryAlzheimers": "Yes",
+    "CholesterolHDL": 50,
+    "CholesterolLDL": 100,
+    "MMSE": 28,
+    # other clinical features...
+}
+
 dementia_data = DementiaData()
 cl.instrument_openai()
 ASSISTANT_READY = False
@@ -95,6 +108,88 @@ async def initialize() -> None:
 
     # Replace the placeholder with the database schema string
     instructions = instructions.replace("{database_schema_string}", database_schema_string)
+
+   
+
+# Game logic class - Shashika
+class DementiaTherapyGames:
+    def __init__(self, patient_data: dict):
+        self.patient_data = patient_data
+        self.risk_level = self.calculate_risk_level(patient_data)
+        self.game_difficulty = self.set_game_difficulty(self.risk_level)
+
+    def calculate_risk_level(self, patient_data):
+        features = [patient_data[feature] for feature in clinical_model.CLINICAL_FEATURES]
+        risk_score = clinical_model.predict([features])[0]
+        return "high" if risk_score > 0.7 else "low"
+
+    def set_game_difficulty(self, risk_level):
+        return "easy" if risk_level == "high" else "hard"
+    
+    def generate_word_puzzle(self):
+        words = ["memory", "dementia", "cognition", "brain", "neuro"]
+        random.shuffle(words)
+        grid = [["" for _ in range(5)] for _ in range(5)]
+        for word in words[:3]:
+            row, col = random.randint(0, 4), random.randint(0, 4)
+            grid[row][col] = word[0]
+            for i in range(1, len(word)):
+                grid[row][(col + i) % 5] = word[i]
+        return grid
+
+    def generate_memory_game(self):
+        items = ["apple", "banana", "cherry", "grape", "pear", "peach"]
+        random.shuffle(items)
+        pairs = items[:3]
+        memory_game = pairs + pairs
+        random.shuffle(memory_game)
+        return memory_game
+    
+    def display_game(self):
+        if self.game_difficulty == "easy":
+            return {"game_type": "memory_match", "game": self.generate_memory_game()}
+        else:
+            return {"game_type": "word_search", "game": self.generate_word_puzzle()}
+
+# Chainlit callback function for starting the game
+@on_message
+async def start_game(message: Message):
+    """Start a personalized dementia therapy game based on patient's data"""
+    
+    # Create a game instance with dummy patient data
+    game_module = DementiaTherapyGames(patient_data)
+    game_details = game_module.display_game()
+    
+    # Send a message about the game
+    await message.reply(f"Starting your {game_details['game_type']} game now!")
+    
+    # Create a timer and scoring system for the game
+    start_time = time.time()  # Start the timer
+    
+    if game_details['game_type'] == 'memory_match':
+        # Example of showing memory game as text
+        await message.reply(f"Memory Game: Match the pairs of words: {game_details['game']}")
+    elif game_details['game_type'] == 'word_search':
+        # Example of showing word puzzle as text
+        grid = game_details['game']
+        grid_str = "\n".join([" ".join(row) for row in grid])
+        await message.reply(f"Word Search Puzzle: Find the words in the grid:\n{grid_str}")
+    
+    # Simulate game completion after a random time (e.g., after 1 minute)
+    # You can modify this with actual user interaction for real-time games
+    time.sleep(10)  # Simulate game duration (10 seconds for example)
+    
+    # Track the time taken and score
+    end_time = time.time()
+    duration = end_time - start_time
+    score = max(100 - int(duration), 0)  # Example scoring based on time
+    await message.reply(f"Game complete! You scored: {score}/100")
+
+    # Daily challenge: Send a new message every time
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    await message.reply(f"Your challenge for today ({today_date}): Complete your game and improve your score tomorrow!")
+
+    # Optionally, store the score and progress (e.g., in a database) to track improvements over time
  
     # Update assistant with new instructions
     sync_openai_client.beta.assistants.update(
