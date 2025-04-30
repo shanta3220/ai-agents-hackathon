@@ -168,7 +168,7 @@ class EventHandler(AsyncAssistantEventHandler):
 
                 # ✅ Optional: update the message to say it's done
                 if self.current_message:
-                    self.current_message.content = "✅ Audio processing complete!"
+                    self.current_message.content = "✅ Processing complete!"
                     await self.current_message.update()
                                         
         elif tool_call.type == "code_interpreter":
