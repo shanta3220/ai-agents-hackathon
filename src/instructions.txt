@@ -29,6 +29,9 @@ Tools
       - Audio-based risk prediction from audio features.
       - Transcript-based risk prediction from speech features.
     - Always request the required fields for each type of prediction.
+    - Additional Notes:
+      - Always prompt the user to provide all required fields for each prediction type.
+      - If an audio file (`.wav`, `.mp3`) is uploaded, automatically extract transcript features and trigger the transcript risk model.
 
 3. Visualizations
     - Write and test code in your sandboxed environment.
