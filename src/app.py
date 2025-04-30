@@ -351,19 +351,20 @@ async def initialize() -> None:
             "type": "function",
             "function": {
                 "name": "predict_transcript_risk_from_audio",
-                "description": "A audio clip file is uploaded by user pass it to this function, and return the result Upload a .wav file, the function will transcribe it, extract features, and predict dementia risk using the transcript model.",
+                "description": "The assistant must pass the local audio_clip_path from the last message to this function. It will transcribe, extract features, and predict dementia risk.",
                 "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "Path to the uploaded .wav file"
-                        }
-                    },
-                    "required": ["file_path"]
+                "type": "object",
+                "properties": {
+                    "audio_clip_path": {
+                    "type": "string",
+                    "description": "Local file path for the audio (e.g., from user upload or message)"
+                    }
+                },
+                "required": ["audio_clip_path"]
                 }
             }
         }
+
     ]
 
     try:
@@ -422,6 +423,13 @@ async def set_starters() -> list[cl.Starter]:
             message="Predict dementia risk from speech features: 250 words, 12 sentences, average sentence length 20, 30 pauses.",
             icon="/public/mic.svg",
         ),
+        cl.Starter( label="Analyze Uploaded Audio Clip",
+            message=(
+                 "Check dementia risk from an audio clip.\n\n"
+                "Please upload an audio file to be analyzed by our Audio and Transcript models."
+            ),
+            icon="/public/audio.svg"
+        )
     ]
 
 async def get_thread_id(async_openai_client: AsyncAzureOpenAI) -> str:
@@ -432,7 +440,7 @@ async def get_thread_id(async_openai_client: AsyncAzureOpenAI) -> str:
     try:
         thread = await async_openai_client.beta.threads.create()
         cl.user_session.set("thread_id", thread.id)
-        # await cl.Message(content="New thread created.").send()
+
         return thread.id
     except Exception as e:
         await cl.Message(content=str(e)).send()
@@ -450,7 +458,7 @@ async def cancel_thread_run(thread_id: str) -> None:
     for run in runs.data:
         if run.status not in ["completed", "cancelled", "expired", "failed"]:
             with suppress(Exception):
-                await client.beta.threads.runs.cancel(run_id=run.id, thread_id=thread_id)
+                await async_openai_client.beta.threads.runs.cancel(run_id=run.id, thread_id=thread_id)
 
 
 async def get_attachments(message: cl.Message, async_openai_client: AsyncAzureOpenAI) -> Dict:
@@ -472,7 +480,7 @@ async def get_attachments(message: cl.Message, async_openai_client: AsyncAzureOp
     if not file_paths:
         return None
 
-    await cl.Message(content="Uploading supported files...").send()
+    await cl.Message(content="⏳ Uploading supported files...").send()
     message_files = []
 
     for path in file_paths:
@@ -505,10 +513,6 @@ async def handle_game_action(action: cl.Action):
             f"📆 Challenge for today ({today}): Try again tomorrow to beat your score!"
         )).send()
 
-import aiofiles
-import tempfile
-import os
-
 @cl.on_message
 async def main(message: cl.Message) -> None:
     """Handle the conversation with the assistant"""
@@ -535,13 +539,14 @@ async def main(message: cl.Message) -> None:
         return
 
     try:
-        audio_extensions = (".wav", ".mp3", ".m4a")
         for file in message.elements:
             if file.name.endswith((".wav", ".mp3")):
-                result = await predict_transcript_risk_from_audio({"file_path": file.path})
-                await cl.Message(content=result.display_format).send()
-                return
-                    
+                audio_path = file.path.replace("\\", "/")  # Normalize
+                if not message.content.strip():
+                    message.content = f"(audio_clip_path: {audio_path})"
+                else:
+                    message.content += f"\n\n(audio_clip_path: {audio_path})"
+
         message_files = await get_attachments(message, async_openai_client)
         await async_openai_client.beta.threads.messages.create(
             thread_id=thread_id,

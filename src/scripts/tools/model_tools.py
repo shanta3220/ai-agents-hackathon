@@ -118,9 +118,12 @@ async def predict_transcript_risk(args: dict) -> QueryResults:
     )
 
 async def predict_transcript_risk_from_audio(args: dict) -> QueryResults:
-    input_path = args.get("file_path")
+    input_path = args.get("audio_clip_path") or args.get("file_path")
     if not input_path:
-        return QueryResults(display_format="❌ No file path provided.", json_format='{"error": "missing_file_path"}')
+        return QueryResults(
+            display_format="❌ No file path provided.",
+            json_format='{"error": "missing_file_path"}'
+        )
 
     file_id = os.path.splitext(os.path.basename(input_path))[0]
     actual_path = None
@@ -133,47 +136,53 @@ async def predict_transcript_risk_from_audio(args: dict) -> QueryResults:
             break
 
     if not actual_path or not os.path.exists(actual_path):
-        return QueryResults(display_format=f"❌ File `{file_id}` not found.", json_format='{"error": "file_not_found"}')
+        return QueryResults(
+            display_format=f"❌ File `{file_id}` not found.",
+            json_format='{"error": "file_not_found"}'
+        )
     
-    processing_msg = await cl.Message(content="⏳ Processing audio... Please wait.").send()
-
     actual_path = os.path.abspath(actual_path).replace("\\", "/")
     os.environ["PATH"] = os.path.abspath("bin") + os.pathsep + os.environ.get("PATH", "")
 
-    # Audio-only features
     audio_features = extract_audio_features(actual_path)
     audio_pred = audio_model.predict(pd.DataFrame([audio_features]))[0]
 
     if audio_pred == 1:
         return QueryResults(
             display_format="🎧 Audio Model: **1**\n\n⚠️ Final Dementia Risk Decision: **AT RISK (audio-based)**",
-            json_format=json.dumps({"audio_model": 1, "final_risk": 1})
+            json_format=json.dumps({
+                "audio_model": 1,
+                "transcript_model": None,
+                "final_risk": 1
+            })
         )
 
     model = whisper.load_model("base")
     result = model.transcribe(actual_path)
     duration = _get_audio_duration(actual_path)
-
     transcript_features = _extract_transcript_features(result["text"], duration)
     transcript_pred = transcript_model.predict(pd.DataFrame([transcript_features]))[0]
 
     final_risk = 1 if transcript_pred == 1 else 0
-
     final_label = "AT RISK" if final_risk else "LOW RISK"
-    final_note = "" if final_risk == 0 else " (transcript-based)"
+    final_note = " (transcript-based)" if final_risk else ""
+
+    display = (
+        f"🎧 Audio Model: **0**\n"
+        f"📝 Transcript Model: **{transcript_pred}**\n\n"
+        f"⚠️ Final Dementia Risk Decision: **{final_label}{final_note}**"
+    )
 
     return QueryResults(
-        display_format=(
-            f"🎧 Audio Model: **0**\n"
-            f"📝 Transcript Model: **{transcript_pred}**\n\n"
-            f"⚠️ Final Dementia Risk Decision: **{final_label}{final_note}**"
-        ),
+        display_format=display,
         json_format=json.dumps({
             "audio_model": 0,
             "transcript_model": int(transcript_pred),
             "final_risk": final_risk
         })
     )
+
+
 
 def extract_audio_features(file_path: str):
     y, sr = librosa.load(file_path, sr=None)
