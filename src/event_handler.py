@@ -125,8 +125,8 @@ class EventHandler(AsyncAssistantEventHandler):
 
     @override
     async def on_tool_call_done(self, tool_call: FunctionToolCall) -> None:
-        """Called when a function tool is invoked and finished."""
-
+        """This method is called when a tool call is done."""
+        """ Parallel tool calling is enabled by default and it's important to iterate through the tool calls. """
         if tool_call.type == "function" and self.current_run.status == "requires_action":
             tool_calls = self.current_run.required_action.submit_tool_outputs.tool_calls
             function_tool_calls = [call for call in tool_calls if call.type == "function"]
