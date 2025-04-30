@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict
 
 import chainlit as cl
+from chainlit import on_message, Message, Action
+from datetime import datetime
+
 import openai
 from chainlit.config import config
 from dotenv import load_dotenv
@@ -14,7 +17,9 @@ from openai import AsyncAzureOpenAI, AzureOpenAI
 from event_handler import EventHandler
 from dementia_data import DementiaData 
 
+from scripts.tools.game_tools import generate_dementia_game
 from scripts.tools.model_tools import predict_health_risk, predict_audio_risk, predict_transcript_risk
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,19 +35,6 @@ ASSISTANT_PASSWORD = os.getenv("ASSISTANT_PASSWORD")
 
 MAX_COMPLETION_TOKENS = 4096
 MAX_PROMPT_TOKENS = 10240
-
-patient_data = {
-    "Age": 75,
-    "Gender": "Female",
-    "BMI": 25.4,
-    "Hypertension": "Yes",
-    "MemoryComplaints": "Yes",
-    "FamilyHistoryAlzheimers": "Yes",
-    "CholesterolHDL": 50,
-    "CholesterolLDL": 100,
-    "MMSE": 28,
-    # other clinical features...
-}
 
 dementia_data = DementiaData()
 cl.instrument_openai()
@@ -78,6 +70,7 @@ function_map: Dict[str, Callable[[Any], Any]] = {
     "count_unique_values": lambda args: dementia_data.count_unique_values(args.get("table"), args.get("column")),
     "summarize_numeric_column": lambda args: dementia_data.summarize_numeric_column(args.get("table"), args.get("column")),
     "count_records": lambda args: dementia_data.count_records(args.get("table")),
+    "generate_dementia_game": generate_dementia_game,
 }
 
 @cl.password_auth_callback
@@ -109,88 +102,6 @@ async def initialize() -> None:
     # Replace the placeholder with the database schema string
     instructions = instructions.replace("{database_schema_string}", database_schema_string)
 
-   
-
-# Game logic class - Shashika
-class DementiaTherapyGames:
-    def __init__(self, patient_data: dict):
-        self.patient_data = patient_data
-        self.risk_level = self.calculate_risk_level(patient_data)
-        self.game_difficulty = self.set_game_difficulty(self.risk_level)
-
-    def calculate_risk_level(self, patient_data):
-        features = [patient_data[feature] for feature in clinical_model.CLINICAL_FEATURES]
-        risk_score = clinical_model.predict([features])[0]
-        return "high" if risk_score > 0.7 else "low"
-
-    def set_game_difficulty(self, risk_level):
-        return "easy" if risk_level == "high" else "hard"
-    
-    def generate_word_puzzle(self):
-        words = ["memory", "dementia", "cognition", "brain", "neuro"]
-        random.shuffle(words)
-        grid = [["" for _ in range(5)] for _ in range(5)]
-        for word in words[:3]:
-            row, col = random.randint(0, 4), random.randint(0, 4)
-            grid[row][col] = word[0]
-            for i in range(1, len(word)):
-                grid[row][(col + i) % 5] = word[i]
-        return grid
-
-    def generate_memory_game(self):
-        items = ["apple", "banana", "cherry", "grape", "pear", "peach"]
-        random.shuffle(items)
-        pairs = items[:3]
-        memory_game = pairs + pairs
-        random.shuffle(memory_game)
-        return memory_game
-    
-    def display_game(self):
-        if self.game_difficulty == "easy":
-            return {"game_type": "memory_match", "game": self.generate_memory_game()}
-        else:
-            return {"game_type": "word_search", "game": self.generate_word_puzzle()}
-
-# Chainlit callback function for starting the game
-@on_message
-async def start_game(message: Message):
-    """Start a personalized dementia therapy game based on patient's data"""
-    
-    # Create a game instance with dummy patient data
-    game_module = DementiaTherapyGames(patient_data)
-    game_details = game_module.display_game()
-    
-    # Send a message about the game
-    await message.reply(f"Starting your {game_details['game_type']} game now!")
-    
-    # Create a timer and scoring system for the game
-    start_time = time.time()  # Start the timer
-    
-    if game_details['game_type'] == 'memory_match':
-        # Example of showing memory game as text
-        await message.reply(f"Memory Game: Match the pairs of words: {game_details['game']}")
-    elif game_details['game_type'] == 'word_search':
-        # Example of showing word puzzle as text
-        grid = game_details['game']
-        grid_str = "\n".join([" ".join(row) for row in grid])
-        await message.reply(f"Word Search Puzzle: Find the words in the grid:\n{grid_str}")
-    
-    # Simulate game completion after a random time (e.g., after 1 minute)
-    # You can modify this with actual user interaction for real-time games
-    time.sleep(10)  # Simulate game duration (10 seconds for example)
-    
-    # Track the time taken and score
-    end_time = time.time()
-    duration = end_time - start_time
-    score = max(100 - int(duration), 0)  # Example scoring based on time
-    await message.reply(f"Game complete! You scored: {score}/100")
-
-    # Daily challenge: Send a new message every time
-    today_date = datetime.now().strftime("%Y-%m-%d")
-    await message.reply(f"Your challenge for today ({today_date}): Complete your game and improve your score tomorrow!")
-
-    # Optionally, store the score and progress (e.g., in a database) to track improvements over time
- 
     # Update assistant with new instructions
     sync_openai_client.beta.assistants.update(
         assistant_id=assistant.id,
@@ -244,167 +155,197 @@ async def start_game(message: Message):
                 },
             },
         },
-    {
+        {
+            "type": "function",
+            "function": {
+                "name": "predict_health_risk",
+                "description": "Predict dementia risk based on patient's health profile.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "Age": {"type": "number"},
+                        "Gender": {"type": "integer"},
+                        "Ethnicity": {"type": "integer"},
+                        "EducationLevel": {"type": "integer"},
+                        "BMI": {"type": "number"},
+                        "Smoking": {"type": "integer"},
+                        "AlcoholConsumption": {"type": "integer"},
+                        "PhysicalActivity": {"type": "integer"},
+                        "DietQuality": {"type": "integer"},
+                        "SleepQuality": {"type": "integer"},
+                        "FamilyHistoryAlzheimers": {"type": "integer"},
+                        "CardiovascularDisease": {"type": "integer"},
+                        "Diabetes": {"type": "integer"},
+                        "Depression": {"type": "integer"},
+                        "HeadInjury": {"type": "integer"},
+                        "Hypertension": {"type": "integer"},
+                        "SystolicBP": {"type": "number"},
+                        "DiastolicBP": {"type": "number"},
+                        "CholesterolTotal": {"type": "number"},
+                        "CholesterolLDL": {"type": "number"},
+                        "CholesterolHDL": {"type": "number"},
+                        "CholesterolTriglycerides": {"type": "number"},
+                        "MMSE": {"type": "integer"},
+                        "FunctionalAssessment": {"type": "integer"},
+                        "MemoryComplaints": {"type": "integer"},
+                        "BehavioralProblems": {"type": "integer"},
+                        "ADL": {"type": "integer"},
+                        "Confusion": {"type": "integer"},
+                        "Disorientation": {"type": "integer"},
+                        "PersonalityChanges": {"type": "integer"},
+                        "DifficultyCompletingTasks": {"type": "integer"},
+                        "Forgetfulness": {"type": "integer"},
+                    },
+                    "required": [
+                        "Age", "Gender", "BMI", "Smoking", "AlcoholConsumption",
+                        "PhysicalActivity", "FamilyHistoryAlzheimers", "Hypertension", "SystolicBP", "DiastolicBP"
+                    ],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "predict_audio_risk",
+                "description": "Predict dementia risk based on extracted audio features from a patient's speech.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "duration": {"type": "number"},
+                        "tempo": {"type": "number"},
+                        "zero_crossing_rate": {"type": "number"},
+                        "rms_energy": {"type": "number"},
+                    },
+                    "required": ["duration", "tempo", "zero_crossing_rate", "rms_energy"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "predict_transcript_risk",
+                "description": "Predict dementia risk based on transcript speech features like word count, sentence count, etc. "
+                "If not provided check the function some values are auto calculated.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "word_count": {"type": "number"},
+                        "sentence_count": {"type": "number"},
+                        "avg_sentence_length": {"type": "number"},
+                        "pause_count": {"type": "number"},
+                        "speech_rate": {"type": "number"},
+                        "pause_per_sentence": {"type": "number"},
+                    },
+                    "required": ["word_count", "sentence_count", "avg_sentence_length", "pause_count", "speech_rate", "pause_per_sentence"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+        "type": "function",
+            "function": {
+                "name": "list_columns",
+                "description": "List all columns in a specified database table.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "table": {"type": "string", "description": "The table name to list columns from."}
+                    },
+                    "required": ["table"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_unique_values",
+                "description": "List all unique values in a specified column of a table.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "table": {"type": "string", "description": "Table name."},
+                        "column": {"type": "string", "description": "Column name."}
+                    },
+                    "required": ["table", "column"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "count_unique_values",
+                "description": "Count how many unique values are in a specified column.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "table": {"type": "string"},
+                        "column": {"type": "string"}
+                    },
+                    "required": ["table", "column"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "summarize_numeric_column",
+                "description": "Summarize statistics (min, max, avg, median, std) of a numeric column.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "table": {"type": "string"},
+                        "column": {"type": "string"}
+                    },
+                    "required": ["table", "column"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "count_records",
+                "description": "Count the total number of records in a table.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "table": {"type": "string"}
+                    },
+                    "required": ["table"],
+                },
+            },
+        },
+        {
         "type": "function",
         "function": {
-            "name": "predict_health_risk",
-            "description": "Predict dementia risk based on patient's health profile.",
+            "name": "generate_dementia_game",
+            "description": "Generate a dementia therapy game for cognitive stimulation based on the patient's clinical profile. Game difficulty is based on predicted dementia risk. Ensure to take the arguments from the instruction if no value provided, do give me flexibility to update values if user changes anything,you must go through the function as defaults values are also set there",
             "parameters": {
+            "type": "object",
+            "properties": {
+                "patient_data": {
                 "type": "object",
+                "description": "Patient profile with clinical features. If not provided, default values will be used from the instructions and be passed to the function.",
                 "properties": {
                     "Age": {"type": "number"},
-                    "Gender": {"type": "integer"},
-                    "Ethnicity": {"type": "integer"},
-                    "EducationLevel": {"type": "integer"},
+                    "Gender": {"type": "string"},
                     "BMI": {"type": "number"},
-                    "Smoking": {"type": "integer"},
-                    "AlcoholConsumption": {"type": "integer"},
-                    "PhysicalActivity": {"type": "integer"},
-                    "DietQuality": {"type": "integer"},
-                    "SleepQuality": {"type": "integer"},
-                    "FamilyHistoryAlzheimers": {"type": "integer"},
-                    "CardiovascularDisease": {"type": "integer"},
-                    "Diabetes": {"type": "integer"},
-                    "Depression": {"type": "integer"},
-                    "HeadInjury": {"type": "integer"},
-                    "Hypertension": {"type": "integer"},
-                    "SystolicBP": {"type": "number"},
-                    "DiastolicBP": {"type": "number"},
-                    "CholesterolTotal": {"type": "number"},
-                    "CholesterolLDL": {"type": "number"},
+                    "Hypertension": {"type": "string"},
+                    "MemoryComplaints": {"type": "string"},
+                    "FamilyHistoryAlzheimers": {"type": "string"},
                     "CholesterolHDL": {"type": "number"},
-                    "CholesterolTriglycerides": {"type": "number"},
-                    "MMSE": {"type": "integer"},
-                    "FunctionalAssessment": {"type": "integer"},
-                    "MemoryComplaints": {"type": "integer"},
-                    "BehavioralProblems": {"type": "integer"},
-                    "ADL": {"type": "integer"},
-                    "Confusion": {"type": "integer"},
-                    "Disorientation": {"type": "integer"},
-                    "PersonalityChanges": {"type": "integer"},
-                    "DifficultyCompletingTasks": {"type": "integer"},
-                    "Forgetfulness": {"type": "integer"},
+                    "CholesterolLDL": {"type": "number"},
+                    "MMSE": {"type": "number"}
                 },
-                "required": [
-                    "Age", "Gender", "BMI", "Smoking", "AlcoholConsumption",
-                    "PhysicalActivity", "FamilyHistoryAlzheimers", "Hypertension", "SystolicBP", "DiastolicBP"
-                ],
-                "additionalProperties": False,
+                "required": ["Age", "Gender", "BMI"],
+                "additionalProperties": True
+                }
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "predict_audio_risk",
-            "description": "Predict dementia risk based on extracted audio features from a patient's speech.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "duration": {"type": "number"},
-                    "tempo": {"type": "number"},
-                    "zero_crossing_rate": {"type": "number"},
-                    "rms_energy": {"type": "number"},
-                },
-                "required": ["duration", "tempo", "zero_crossing_rate", "rms_energy"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "predict_transcript_risk",
-            "description": "Predict dementia risk based on transcript speech features like word count, sentence count, etc. "
-            "If not provided check the function some values are auto calculated.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "word_count": {"type": "number"},
-                    "sentence_count": {"type": "number"},
-                    "avg_sentence_length": {"type": "number"},
-                    "pause_count": {"type": "number"},
-                    "speech_rate": {"type": "number"},
-                    "pause_per_sentence": {"type": "number"},
-                },
-                "required": ["word_count", "sentence_count", "avg_sentence_length", "pause_count", "speech_rate", "pause_per_sentence"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-    "type": "function",
-        "function": {
-            "name": "list_columns",
-            "description": "List all columns in a specified database table.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "table": {"type": "string", "description": "The table name to list columns from."}
-                },
-                "required": ["table"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_unique_values",
-            "description": "List all unique values in a specified column of a table.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "table": {"type": "string", "description": "Table name."},
-                    "column": {"type": "string", "description": "Column name."}
-                },
-                "required": ["table", "column"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "count_unique_values",
-            "description": "Count how many unique values are in a specified column.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "table": {"type": "string"},
-                    "column": {"type": "string"}
-                },
-                "required": ["table", "column"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "summarize_numeric_column",
-            "description": "Summarize statistics (min, max, avg, median, std) of a numeric column.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "table": {"type": "string"},
-                    "column": {"type": "string"}
-                },
-                "required": ["table", "column"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "count_records",
-            "description": "Count the total number of records in a table.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "table": {"type": "string"}
-                },
-                "required": ["table"],
-            },
-        },
-    },
+            "required": ["patient_data"]
+            }
+        }
+        }
     ]
 
     try:
@@ -432,6 +373,11 @@ async def set_starters() -> list[cl.Starter]:
             label="Help and Usage Guide",
             message="Help: How can I interact with you?",
             icon="/public/idea.svg",
+        ),        
+        cl.Starter(
+            label="Start Dementia Therapy Game",
+            message="Generate a dementia therapy game for a 75-year-old woman with memory complaints.",
+            icon="/public/game.svg",
         ),
         cl.Starter(
             label="Explore Database Columns",
@@ -512,9 +458,32 @@ async def get_attachments(message: cl.Message, async_openai_client: AsyncAzureOp
 async def on_chat_resume():
     await cl.Message(content="Session resumed! You can continue asking your next question.").send()
 
+@cl.action_callback("complete_game")
+async def handle_game_action(action: cl.Action):
+    start_time = cl.user_session.get("game_start_time")
+    if start_time:
+        duration = (datetime.now() - start_time).seconds
+        score = max(100 - duration, 0)
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        cl.user_session.set("game_start_time", None)
+        cl.user_session.set("game_type", None)
+        cl.user_session.set("patient_data", None)
+
+        await cl.Message(content=(
+            f"✅ **Game complete!** You scored: **{score}/100**\n"
+            f"📆 Challenge for today ({today}): Try again tomorrow to beat your score!"
+        )).send()
+        
 @cl.on_message
 async def main(message: cl.Message) -> None:
     """Handle the conversation with the assistant"""
+    start_time = cl.user_session.get("game_start_time")
+    GAME_DONE_KEYWORDS = {"done", "finished", "submit", "complete", "i'm done", "i'm finished"}
+    if start_time and any(kw in message.content.lower() for kw in GAME_DONE_KEYWORDS):
+        return
+
+    triggered_tool_directly = "start game" in message.content.lower() or "generate dementia therapy game" in message.content.lower()
     completed = False
 
     if assistant is None:
@@ -527,14 +496,13 @@ async def main(message: cl.Message) -> None:
     thread_id = await get_thread_id(async_openai_client)
 
     if not thread_id:
-        await cl.Message(content="A thread wa not successfully created.").send()
+        await cl.Message(content="A thread was not successfully created.").send()
         logger.error("Thread not successfully created.")
         return
 
     try:
         message_files = await get_attachments(message, async_openai_client)
 
-        # Add a Message to the Thread
         await async_openai_client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
@@ -542,7 +510,6 @@ async def main(message: cl.Message) -> None:
             attachments=message_files,
         )
 
-        # Create and Stream a Run
         async with async_openai_client.beta.threads.runs.stream(
             thread_id=thread_id,
             assistant_id=assistant.id,
@@ -560,7 +527,6 @@ async def main(message: cl.Message) -> None:
 
         completed = True
 
-    # triggered when the user stops a chat
     except asyncio.exceptions.CancelledError:
         pass
 
@@ -568,6 +534,8 @@ async def main(message: cl.Message) -> None:
         await cl.Message(content=f"An error occurred: {e}").send()
         await cl.Message(content="Please try again in a moment.").send()
         logger.error("An error calling the LLM occurred: %s", str(e))
+
     finally:
-        if not completed:
-            await cancel_thread_run(thread_id)
+        if not completed and not triggered_tool_directly:
+         await cancel_thread_run(thread_id)
+
