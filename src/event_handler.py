@@ -122,17 +122,18 @@ class EventHandler(AsyncAssistantEventHandler):
         await current_step.stream_token(result.display_format)
         current_step.start = utc_now()
         await current_step.send()
-        self.current_message = await cl.Message(author=self.assistant_name, content="").send()
 
     @override
     async def on_tool_call_done(self, tool_call: FunctionToolCall) -> None:
-        """This method is called when a tool call is done."""
-        """ Parallel tool calling is enabled by default and it's important to iterate through the tool calls. """
+        """Called when a function tool is invoked and finished."""
 
         if tool_call.type == "function" and self.current_run.status == "requires_action":
             tool_calls = self.current_run.required_action.submit_tool_outputs.tool_calls
             function_tool_calls = [call for call in tool_calls if call.type == "function"]
             tool_outputs = []
+
+            # ✅ Step 1: Show "Processing..." message once
+            self.current_message = await cl.Message(content="⏳ Processing your request...").send()
 
             for submit_tool_call in function_tool_calls:
                 function = self.function_map.get(submit_tool_call.function.name)
@@ -147,8 +148,11 @@ class EventHandler(AsyncAssistantEventHandler):
                     )
 
                 tool_outputs.append({"tool_call_id": submit_tool_call.id, "output": result.json_format})
+
+                # ✅ Step 2: Update function output in a step
                 await self.update_chainlit_function_ui("sql", submit_tool_call, result)
 
+            # ✅ Step 3: Submit tool outputs and update the message once complete
             if tool_outputs:
                 async with self.async_openai_client.beta.threads.runs.submit_tool_outputs_stream(
                     thread_id=self.current_run.thread_id,
@@ -162,8 +166,11 @@ class EventHandler(AsyncAssistantEventHandler):
                 ) as stream:
                     await stream.until_done()
 
-                await self.current_message.update()
-
+                # ✅ Optional: update the message to say it's done
+                if self.current_message:
+                    self.current_message.content = "✅ Processing complete!"
+                    await self.current_message.update()
+                                        
         elif tool_call.type == "code_interpreter":
             self.current_step.end = utc_now()
             await self.current_step.update()

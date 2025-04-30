@@ -54,7 +54,10 @@ edit_message = true
         ".css",
         ".js",
         ".sh",
-        ".ts"
+        ".ts",
+        ".mp3",
+        ".wav",
+        ".mp3"
     ]
     max_files = 5
     max_size_mb = 50

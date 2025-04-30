@@ -18,7 +18,7 @@ from event_handler import EventHandler
 from dementia_data import DementiaData 
 
 from scripts.tools.game_tools import generate_dementia_game
-from scripts.tools.model_tools import predict_health_risk, predict_audio_risk, predict_transcript_risk
+from scripts.tools.model_tools import predict_health_risk, predict_audio_risk, predict_transcript_risk, predict_transcript_risk_from_audio
 
 
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +71,7 @@ function_map: Dict[str, Callable[[Any], Any]] = {
     "summarize_numeric_column": lambda args: dementia_data.summarize_numeric_column(args.get("table"), args.get("column")),
     "count_records": lambda args: dementia_data.count_records(args.get("table")),
     "generate_dementia_game": generate_dementia_game,
+    "predict_transcript_risk_from_audio": predict_transcript_risk_from_audio,
 }
 
 @cl.password_auth_callback
@@ -317,35 +318,53 @@ async def initialize() -> None:
             },
         },
         {
-        "type": "function",
-        "function": {
-            "name": "generate_dementia_game",
-            "description": "Generate a dementia therapy game for cognitive stimulation based on the patient's clinical profile. Game difficulty is based on predicted dementia risk. Ensure to take the arguments from the instruction if no value provided, do give me flexibility to update values if user changes anything,you must go through the function as defaults values are also set there",
-            "parameters": {
-            "type": "object",
-            "properties": {
-                "patient_data": {
+            "type": "function",
+            "function": {
+                "name": "generate_dementia_game",
+                "description": "Generate a dementia therapy game for cognitive stimulation based on the patient's clinical profile. Game difficulty is based on predicted dementia risk. Ensure to take the arguments from the instruction if no value provided, do give me flexibility to update values if user changes anything,you must go through the function as defaults values are also set there",
+                "parameters": {
                 "type": "object",
-                "description": "Patient profile with clinical features. If not provided, default values will be used from the instructions and be passed to the function.",
                 "properties": {
-                    "Age": {"type": "number"},
-                    "Gender": {"type": "string"},
-                    "BMI": {"type": "number"},
-                    "Hypertension": {"type": "string"},
-                    "MemoryComplaints": {"type": "string"},
-                    "FamilyHistoryAlzheimers": {"type": "string"},
-                    "CholesterolHDL": {"type": "number"},
-                    "CholesterolLDL": {"type": "number"},
-                    "MMSE": {"type": "number"}
+                    "patient_data": {
+                    "type": "object",
+                    "description": "Patient profile with clinical features. If not provided, default values will be used from the instructions and be passed to the function.",
+                    "properties": {
+                        "Age": {"type": "number"},
+                        "Gender": {"type": "string"},
+                        "BMI": {"type": "number"},
+                        "Hypertension": {"type": "string"},
+                        "MemoryComplaints": {"type": "string"},
+                        "FamilyHistoryAlzheimers": {"type": "string"},
+                        "CholesterolHDL": {"type": "number"},
+                        "CholesterolLDL": {"type": "number"},
+                        "MMSE": {"type": "number"}
+                    },
+                    "required": ["Age", "Gender", "BMI"],
+                    "additionalProperties": True
+                    }
                 },
-                "required": ["Age", "Gender", "BMI"],
-                "additionalProperties": True
+                "required": ["patient_data"]
                 }
-            },
-            "required": ["patient_data"]
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "predict_transcript_risk_from_audio",
+                "description": "The assistant must pass the local audio_clip_path from the last message to this function. It will transcribe, extract features, and predict dementia risk.",
+                "parameters": {
+                "type": "object",
+                "properties": {
+                    "audio_clip_path": {
+                    "type": "string",
+                    "description": "Local file path for the audio (e.g., from user upload or message)"
+                    }
+                },
+                "required": ["audio_clip_path"]
+                }
             }
         }
-        }
+
     ]
 
     try:
@@ -404,6 +423,13 @@ async def set_starters() -> list[cl.Starter]:
             message="Predict dementia risk from speech features: 250 words, 12 sentences, average sentence length 20, 30 pauses.",
             icon="/public/mic.svg",
         ),
+        cl.Starter( label="Analyze Uploaded Audio Clip",
+            message=(
+                 "Check dementia risk from an audio clip.\n\n"
+                "Please upload an audio file to be analyzed by our Audio and Transcript models."
+            ),
+            icon="/public/audio.svg"
+        )
     ]
 
 async def get_thread_id(async_openai_client: AsyncAzureOpenAI) -> str:
@@ -414,7 +440,7 @@ async def get_thread_id(async_openai_client: AsyncAzureOpenAI) -> str:
     try:
         thread = await async_openai_client.beta.threads.create()
         cl.user_session.set("thread_id", thread.id)
-        # await cl.Message(content="New thread created.").send()
+
         return thread.id
     except Exception as e:
         await cl.Message(content=str(e)).send()
@@ -432,16 +458,29 @@ async def cancel_thread_run(thread_id: str) -> None:
     for run in runs.data:
         if run.status not in ["completed", "cancelled", "expired", "failed"]:
             with suppress(Exception):
-                await client.beta.threads.runs.cancel(run_id=run.id, thread_id=thread_id)
+                await async_openai_client.beta.threads.runs.cancel(run_id=run.id, thread_id=thread_id)
 
 
 async def get_attachments(message: cl.Message, async_openai_client: AsyncAzureOpenAI) -> Dict:
     """Upload attachments to the assistant"""
     file_paths = [file.path for file in message.elements]
+
+    # Only include supported file types for OpenAI Assistants API
+    supported_extensions = (
+        ".txt", ".pdf", ".csv", ".json", ".md", ".doc", ".docx", ".pptx",
+        ".html", ".xml", ".js", ".py", ".ts", ".java", ".rb", ".c", ".cpp",
+        ".css", ".xlsx", ".zip", ".tar", ".tex", ".gif", ".jpg", ".jpeg", ".png", ".webp", ".pkl"
+    )
+
+    file_paths = [
+        file.path for file in message.elements
+        if file.name.lower().endswith(supported_extensions)
+    ]
+
     if not file_paths:
         return None
 
-    await cl.Message(content="Uploading files.").send()
+    await cl.Message(content="⏳ Uploading supported files...").send()
     message_files = []
 
     for path in file_paths:
@@ -449,9 +488,8 @@ async def get_attachments(message: cl.Message, async_openai_client: AsyncAzureOp
             uploaded_file = await async_openai_client.files.create(file=file, purpose="assistants")
             message_files.append({"file_id": uploaded_file.id, "tools": [{"type": "file_search"}]})
 
-    # Wait a moment for the uploaded files to become available
     await asyncio.sleep(2)
-    await cl.Message(content="Uploading completed.").send()
+    await cl.Message(content="Finished uploading supported files.").send()
     return message_files
 
 @cl.on_chat_resume
@@ -474,7 +512,7 @@ async def handle_game_action(action: cl.Action):
             f"✅ **Game complete!** You scored: **{score}/100**\n"
             f"📆 Challenge for today ({today}): Try again tomorrow to beat your score!"
         )).send()
-        
+
 @cl.on_message
 async def main(message: cl.Message) -> None:
     """Handle the conversation with the assistant"""
@@ -501,8 +539,15 @@ async def main(message: cl.Message) -> None:
         return
 
     try:
-        message_files = await get_attachments(message, async_openai_client)
+        for file in message.elements:
+            if file.name.endswith((".wav", ".mp3")):
+                audio_path = file.path.replace("\\", "/")  # Normalize
+                if not message.content.strip():
+                    message.content = f"(audio_clip_path: {audio_path})"
+                else:
+                    message.content += f"\n\n(audio_clip_path: {audio_path})"
 
+        message_files = await get_attachments(message, async_openai_client)
         await async_openai_client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
