@@ -35,14 +35,17 @@ Nuroxa is an AI-powered assistant designed to analyze short audio inputs and ass
 </pre>
 
 ## ⚙️ Setup & Run
-1. Install dependencies
+1. Copy the example environment file and fill in your own values:  
+cp .env.example .env  
+
+3. Install dependencies:  
 pip install -r requirements.txt
 
-2. Run Locally
+4. Run Locally:  
 cd src
 uvicorn api:app --reload --port 8000
 
-3. Launch Chainlit interface
+5. Launch Chainlit interface:  
 chainlit run chainlit/main.py
 
 ## 🌐 Deployment
