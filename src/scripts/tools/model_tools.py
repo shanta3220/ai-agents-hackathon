@@ -9,6 +9,7 @@ import wave
 import re
 import os
 import librosa
+import chainlit as cl  
 
 # Training models
 audio_model = joblib.load('src/model/audio_risk_model.pkl')
@@ -133,6 +134,8 @@ async def predict_transcript_risk_from_audio(args: dict) -> QueryResults:
 
     if not actual_path or not os.path.exists(actual_path):
         return QueryResults(display_format=f"❌ File `{file_id}` not found.", json_format='{"error": "file_not_found"}')
+    
+    processing_msg = await cl.Message(content="⏳ Processing audio... Please wait.").send()
 
     actual_path = os.path.abspath(actual_path).replace("\\", "/")
     os.environ["PATH"] = os.path.abspath("bin") + os.pathsep + os.environ.get("PATH", "")
@@ -156,11 +159,14 @@ async def predict_transcript_risk_from_audio(args: dict) -> QueryResults:
 
     final_risk = 1 if transcript_pred == 1 else 0
 
+    final_label = "AT RISK" if final_risk else "LOW RISK"
+    final_note = "" if final_risk == 0 else " (transcript-based)"
+
     return QueryResults(
         display_format=(
             f"🎧 Audio Model: **0**\n"
             f"📝 Transcript Model: **{transcript_pred}**\n\n"
-            f"⚠️ Final Dementia Risk Decision: **{'AT RISK' if final_risk else 'LOW RISK'} (transcript-based)**"
+            f"⚠️ Final Dementia Risk Decision: **{final_label}{final_note}**"
         ),
         json_format=json.dumps({
             "audio_model": 0,
