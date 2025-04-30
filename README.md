@@ -35,22 +35,22 @@ Nuroxa is an AI-powered assistant designed to analyze short audio inputs and ass
 </pre>
 
 ## ⚙️ Setup & Run
-1. Copy the example environment file and fill in your own values:  
-cp .env.example .env  
+1. Copy the example environment file and fill with required values:  
+<pre> cp .env.example .env </pre> 
 
 3. Install dependencies:  
-pip install -r requirements.txt
+<pre> pip install -r requirements.txt </pre> 
 
 4. Run Locally:  
-cd src
-uvicorn api:app --reload --port 8000
+<pre> cd src
+uvicorn api:app --reload --port 8000 </pre> 
 
 5. Launch Chainlit interface:  
-chainlit run chainlit/main.py
+<pre> chainlit run chainlit/main.py </pre> 
 
 ## 🌐 Deployment
-Deploy using Azure Developer CLI and Bicep. Update the .env file with required values before running:
-azd up
+Deploy using Azure Developer CLI and Bicep. 
+<pre> azd up </pre>
 
 ## 🧪 Model Training (Overview)
 We used annotated audio clips and extracted features like MFCCs, signal energy, and pause patterns using Librosa. The processed data was then used to train a scikit-learn classifier, saved as risk_predictor.pkl.
