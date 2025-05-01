@@ -149,7 +149,7 @@ This will:
 We used annotated audio clips and extracted features like MFCCs, signal energy, and pause patterns using Librosa. The processed data was then used to train a scikit-learn classifier, saved as risk_predictor.pkl.
 
 ## 👥 Team
-Built by Nusrat Jahan Shanta, Ekaterina Dunovskaia, Shashika Kahatapitiya, and Gurneer Bedi during the MS AI Agents Hackathon.
+Built by Nusrat Jahan Shanta, Kate Dunovskaia, Tashrif Mahmud, Shashika Kahatapitiya, and Gurneer Bedi during the MS AI Agents Hackathon.
 
 ## 📚 Acknowledgements
 
