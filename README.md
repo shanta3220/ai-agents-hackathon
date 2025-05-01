@@ -1,5 +1,5 @@
 # 🧠 Nuroxa AI Agent  
-Nuroxa is an AI-powered assistant designed to analyze short audio inputs and assess behavioral risk using speech patterns like pauses, energy, and signal variation. Built with FastAPI and Chainlit, it offers a seamless, interactive interface for both backend predictions and frontend chat-based use.
+Nuroxa is an AI-powered dementia risk analysis assistant built with FastAPI and Chainlit, designed to support healthcare professionals by predicting dementia risk using clinical profiles, audio features, and speech transcripts. It can query real patient databases, generate visualizations, and deliver cognitive therapy games tailored to patient data—all through a conversational, empathetic interface optimized for clarity and decision support.
 
 ## 🚀 Features  
 - 🗣️ Clinical profile, audio-based, and transcript-based risk analysis using machine learning
@@ -129,8 +129,8 @@ az login
   - AZURE_ASSISTANT_NAME
   - CONTAINER_APP_ENVIRONMENT_NAME
   - CONTAINER_APP_ENVIRONMENT_RESOURCE_GROUP
-  - LITERAL_API_KEY=
-  - CHAINLIT_AUTH_SECRET=
+  - LITERAL_API_KEY
+  - CHAINLIT_AUTH_SECRET
 
 **Note:** For more detailed deployment instructions, see the [Official Contoso Sales Azure Assistant guide](https://azure-samples.github.io/contoso-sales-azure-openai-assistants-api/development/).
 
