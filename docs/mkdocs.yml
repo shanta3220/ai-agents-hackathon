@@ -1,13 +1,9 @@
 site_name: Nuroxa AI Assistant
+docs_dir: .
+site_dir: ../site
 
 nav:
-  - Introduction: index.md
-  - Security: security.md
-  - Resources: resources.md
-  - Conversation: conversation.md
-  - Development: development.md
-  - Deployment: deployment.md
-  - Summary: summary.md
+  - Introduction: README.md
 
 plugins:
   - glightbox

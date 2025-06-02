@@ -1,5 +1,5 @@
 # 🧠 Nuroxa AI Agent  
-Nuroxa is an AI-powered dementia risk analysis assistant built with FastAPI and Chainlit, designed to support healthcare professionals by predicting dementia risk using clinical profiles, audio features, and speech transcripts. It can query real patient databases, generate visualizations, and deliver cognitive therapy games tailored to patient data—all through a conversational, empathetic interface optimized for clarity and decision support.
+Nuroxa is an AI-powered dementia risk analysis assistant built with Python, Azure AI Services and Chainlit, designed to support healthcare professionals by predicting dementia risk using clinical profiles, audio features, and speech transcripts. It can query real patient databases, generate visualizations, and deliver cognitive therapy games tailored to patient data—all through a conversational, empathetic interface optimized for clarity and decision support.
 
 
 ▶️ [Click here to watch the demo video](https://youtu.be/5N6_jXB1R3U?si=3C6I-uX5sWfIaZJB)
